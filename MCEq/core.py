@@ -7,7 +7,6 @@ from MCEq.misc import normalize_hadronic_model_name, info
 from MCEq.particlemanager import ParticleManager
 import MCEq.data
 
-
 class MCEqRun(object):
     """Main class for handling the calculation.
 
@@ -612,7 +611,7 @@ class MCEqRun(object):
             elif base_model == 'MSIS00_IC':
                 self.density_model = dprof.MSIS00IceCubeCentered(*model_config)
             elif base_model == 'MSIS00_general':
-                self.density_mode = dprof.MSIS00GeneralDetector(*model_config)
+                self.density_model = dprof.MSIS00GeneralDetector(*model_config)
             elif base_model == 'CORSIKA':
                 self.density_model = dprof.CorsikaAtmosphere(*model_config)
             elif base_model == 'AIRS':
@@ -640,7 +639,7 @@ class MCEqRun(object):
         # indices as well
         # self.pmod._gen_list_of_particles()
 
-    def set_theta_deg(self, theta_deg):
+    def set_theta_deg(self, theta_deg, azimuth_deg=0.):
         """Sets zenith angle :math:`\\theta` as seen from a detector.
 
         Currently only 'down-going' angles (0-90 degrees) are supported.
@@ -660,7 +659,7 @@ class MCEqRun(object):
                  'Theta selection correponds to cached value, skipping calc.')
             return
 
-        self.density_model.set_theta(theta_deg)
+        self.density_model.set_theta(theta_deg,azimuth_deg)
         self.integration_path = None
 
 
