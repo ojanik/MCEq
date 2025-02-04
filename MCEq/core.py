@@ -596,7 +596,7 @@ class MCEqRun(object):
             base_model, model_config = density_config
 
             available_models = [
-                'MSIS00', 'MSIS00_IC', 'CORSIKA', 'AIRS', 'Isothermal',
+                'MSIS00', 'MSIS00_IC', 'MSIS00_general', 'CORSIKA', 'AIRS', 'Isothermal',
                 'GeneralizedTarget'
             ]
 
@@ -611,6 +611,8 @@ class MCEqRun(object):
                 self.density_model = dprof.MSIS00Atmosphere(*model_config)
             elif base_model == 'MSIS00_IC':
                 self.density_model = dprof.MSIS00IceCubeCentered(*model_config)
+            elif base_model == 'MSIS00_general':
+                self.density_mode = dprof.MSIS00GeneralDetector(*model_config)
             elif base_model == 'CORSIKA':
                 self.density_model = dprof.CorsikaAtmosphere(*model_config)
             elif base_model == 'AIRS':

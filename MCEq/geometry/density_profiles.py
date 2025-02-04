@@ -1086,6 +1086,143 @@ class MSIS00IceCubeCentered(MSIS00Atmosphere):
 
         self.theta_deg = theta_deg
 
+class MSIS00GeneralDetector(MSIS00Atmosphere):
+    """Extension of :class:`MSIS00Atmosphere` which couples the latitude
+    setting with the zenith and azimuth angle of the detector. 
+    This is an extension for an abritrary detector location compared to
+    the IceCube centered atmosphere.
+
+    Args:
+      location (str): see :func:`init_parameters`
+      season (str,optional): see :func:`init_parameters`
+    """
+
+    def __init__(self, season, detector_depth = 0., detector_lat = 0., detector_lon = 0.):
+        # location defaults to SouthPole as it is not needed
+        location = "SouthPole"
+        MSIS00Atmosphere.__init__(self, location, season)
+
+        # Allow for upgoing zenith angles
+        self.max_theta = 180.0
+        # Height of the detector compared to the sea level in meters
+        self.detector_depth = detector_depth
+
+        self.detector_lat = detector_lat
+        self.detector_lon = detector_lon
+
+    def latitude_longitude(self, det_zenith_deg, det_azimuth_deg):
+        """Returns the geographic latitude of the shower impact point.
+
+        Assumes a spherical earth. The detector is 1948m under the
+        surface.
+
+        Args:
+          det_zenith_deg (float): zenith angle at detector in degrees
+
+        Returns:
+          float: latitude of the impact point in degrees
+        """
+        R = self.geom.r_E
+        print(R)
+        d = self.detector_depth # m
+        r = R - d 
+        print(r)
+
+        phi = self.detector_lat / 180.0 * np.pi
+        lamb = self.detector_lon / 180.0 * np.pi
+
+        theta_rad = det_zenith_deg / 180.0 * np.pi
+        azimuth_rad = det_azimuth_deg / 180.0 * np.pi 
+
+        # Calculate distance from the detector to the point where the shower hits the surface
+        distance_to_shower = abs(- r * np.cos(theta_rad) + np.sqrt(R**2 - r**2 * np.sin(theta_rad)**2))
+        print("distance to shower" , distance_to_shower)
+        # Transform detector latitude and detector longitude to cartesian coordinates
+
+        #x = r * np.cos(phi) * np.cos(lamb)
+        #y = r * np.cos(phi) * np.sin(lamb)
+        z = r #* np.sin(phi) 
+
+        # Calculate displacement vector from the detector to the point where the shower hits the surface
+        # from the POV of the detector
+
+        x_view = distance_to_shower * np.sin(theta_rad) * np.cos(azimuth_rad)
+        y_view = distance_to_shower * np.sin(theta_rad) * np.sin(azimuth_rad)
+        z_view = distance_to_shower * np.cos(theta_rad)
+
+        # Rotate the displacement vector to the Earths coordinate system
+
+        Rot = np.array([
+        [-np.sin(lamb),              np.cos(lamb),              0              ],
+        [-np.sin(phi)*np.cos(lamb), -np.sin(phi)*np.sin(lamb),  np.cos(phi)    ],
+        [ np.cos(phi)*np.cos(lamb),  np.cos(phi)*np.sin(lamb),  np.sin(phi)    ]
+        ])
+
+        #x_rot = Rot @ np.array([x_view, y_view, z_view])
+
+        # x_rot = x_view * np.cos(phi) * np.cos(lamb) + y_view * np.cos(phi) * np.sin(lamb) - z_view * np.sin(phi)
+        # y_rot = - x_view * np.sin(lamb) + y_view * np.cos(lamb)
+        # z_rot = x_view * np.sin(phi) * np.cos(lamb) + y_view * np.sin(phi) * np.sin(lamb) + z_view * np.cos(phi)
+
+        # Calculate the point where the shower hits the surface of the Earth
+
+        x_hit = x_view
+        y_hit = y_view
+        z_hit = z + z_view
+
+        # Calculate the latitude and longitude of the point where the shower hits the surface
+
+        rotated_hit = Rot.T@np.array([x_hit, y_hit, z_hit])
+
+        x_hit, y_hit, z_hit = rotated_hit[0], rotated_hit[1], rotated_hit[2]
+
+        r_hit = np.sqrt(x_hit**2 + y_hit**2 + z_hit**2)
+        print(r_hit - R)
+        phi_hit = np.arcsin(z_hit / r_hit)
+        lamb_hit = np.arctan2(y_hit, x_hit)
+
+        # Retransform to deg
+
+        lat_hit = phi_hit / np.pi * 180.0
+        lon_hit = lamb_hit / np.pi * 180.0
+
+
+        return lat_hit, lon_hit
+
+    def set_theta(self, theta_deg, azimuth_deg=0.):
+
+        latitude, longitude = self.latitude_longitude(theta_deg, azimuth_deg)
+
+        self._msis.set_location_coord(longitude=longitude, latitude=latitude)
+        info(
+            1,
+            "latitude = {0:5.2f} and longitude = {1:5.2f} for zenith = {2:5.2f} and azimuth = zenith = {3:5.2f}".format(
+                latitude, longitude, theta_deg, azimuth_deg
+            ),
+        )
+
+        # correct calculation for any theta angle considering the depth of the detector
+        # as usually r_E >> detector_depth the correction is small and may be neglected
+
+  
+        corr = (1-self.detector_depth/self.geom.r_E)**2
+        downgoing_theta_deg = np.arccos(np.sqrt(corr*np.cos(theta_deg/180*np.pi)**2 + 1 - corr)) / np.pi * 180
+
+        # simplified solution:
+
+        # downgoing_theta_deg = theta_deg
+        # if theta_deg > 90.0:
+        #     downgoing_theta_deg = 180.0 - theta_deg
+        #     info(
+        #         1,
+        #         "theta = {0:5.2f} below horizon. using theta = {1:5.2f}".format(
+        #             theta_deg, downgoing_theta_deg
+        #         ),
+        #     )
+        MSIS00Atmosphere.set_theta(self, downgoing_theta_deg)
+
+        self.theta_deg = theta_deg
+        self.downgoing_theta_deg = downgoing_theta_deg
 
 class GeneralizedTarget(object):
     """This class provides a way to run MCEq on piece-wise constant
